@@ -26,8 +26,11 @@ class AutoCommand(Config) :
     self.loadAutoCommandInfo()
 
     # Initialize Core Commands
-    CommandManager(self.getAutoCommandParser(), self.getBaseDir())
+    self.commandManager = CommandManager(self.getAutoCommandParser(), self.getBaseDir())
     #self.initializeCoreCommands()
+
+    # Initialize Category Controller
+    self.categoryManager = CategoryManager(self.getAutoCommandParser(), self.getBaseDir(), self.commandManager.getCommandsList())
 
     # Applied Auto Complete
     argcomplete.autocomplete(parser)

@@ -3,22 +3,16 @@
 import os, json
 
 from cmd.Base.Config import *
+from cmd.Core.Command import *
 
-class Category(Config) :
-  def __init__(self,
-               category_name,
-               parser,
-               base_dir,
-               category_type='normal') :
-    Config.__init__(self, base_dir)
-
+class Category() :
+  def __init__(self, category_name, parser) :
     # Set initial variable for Category Class
     self.setCategoryName(category_name)
-    category_parser = parser.add_parser(category_name, add_help=False)
-    subparser = category_parser.add_subparsers()
-    self.setCategoryParser(subparser)
+    category_parser = parser.add_parser(self.getCategoryName(), add_help=False)
+    self.setCategoryParser(category_parser.add_subparsers())
 
-    self.loadCategoryInfo()
+    #self.loadCategoryInfo()
 
   def setCategoryName(self, category_name) :
     self.CategoryName = category_name
@@ -31,170 +25,142 @@ class Category(Config) :
 
   def setCategoryParser(self, parser) :
     self.CategoryParser = parser
-#    if getCommandType() == 'core' :
-#      self.CommandParser.set_defaults(command=getCommandName(),
-#                                      base_path=self.getBaseDir())
-#    else :
-#      self.CommandParser.set_defaults(command=getCommandName(),
-#                                      base_path=self.getBaseDir(),
-#                                      func=self.defaultFunction)
 
   def getCategoryParser(self) :
     return self.CategoryParser
 
-  def loadCategoryInfo(self) :
-    if not os.path.isdir(self.getCategoryPath()) :
-      self.setConfigDataAsDefault()
 
-    self.CategoryConfig = self.getConfigInfo()
+class CategoryManager(Config) :
+  def __init__(self, parser, base_dir, commandList = []) :
+    Config.__init__(self, base_dir)
 
-  def setCategoryDataAsDefault(self) :
-    if not os.path.isdir(self.getCategoryPath()) :
-      os.mkdir(self.getCategoryPath())
+    self.loadCategoriesConfig()
+    self.setCategoryManagerParser(parser)
 
-  def saveCategoryInfo(self, json) :
-    pass
+    # To avoid multiple name with commands
+    self.commandList = commandList
 
-  def addCategoryOption(self, _option, nargs='+', choices=()) :
-    if len(choices) == 0 :
-      self.getCategoryParser().add_argument(_option, nargs=nargs)
-    else :
-      self.getCategoryParser().add_argument(_option, nargs=nargs, choices=choices)
+    # set category controller
+    self.setCategoryController()
 
-  def delCategoryOption(self, _option) :
-    pass
+    # load Categories
+    self.loadCategories()
 
-  def addCommand(self, args):
-    print 'BASE PATH :: ' + args.base_path
-    print 'New Command :: ' + args.command_name[0]
-    base_path = args.base_path.encode('utf-8')
-    command_name = args.command_name[0]
-    os.system('touch ' + os.path.join(base_path, 'commands', command_name))
-    f = open(os.path.join(base_path, 'commands', command_name), 'w')
-    f.write('#!/bin/bash\n\n')
-    f.write('echo %s' % command_name)
-    self.config['commands'][command_name] = {}
-    Command(command_name, self.subparser, self.commands_dir)
-    self.updateConfig()
-    updateCmd()
+  def setCategoryController(self) :
+    cHandler = Category('category', self.getCategoryManagerParser())
+    
+    addHandler = Command('add', cHandler.getCategoryParser())
+    addHandler.addCommandOption('categoryName', nargs = 1)
+    addHandler.setCommandFunction(self.addCategoryFunction)
 
-  def delCommand(self, args):
-    print 'BASE PATH :: ' + args.base_path
-    print "delCommand in Category"
-    os.system('rm ' + os.path.join(args.base_path, 'commands', args.var))
-    updateCmd()
-    #os.system('rm ' + os.path.join(args.base_path, args.var))
-    #argcomplete.autocomplete(self.parser)
-    #self.options = self.parser.parse_args()
+    delHandler = Command('del', cHandler.getCategoryParser())
+    delHandler.addCommandOption('categoryName', nargs = 1,
+                                choices=tuple(self.getCategoryList()))
+    delHandler.setCommandFunction(self.delCategoryFunction)
 
-  def editCommand(self, args):
-    print 'BASE PATH :: ' + args.base_path
-    print "editCommand in Category"
+    renameHandler = Command('rename', cHandler.getCategoryParser())
+    renameHandler.addCommandOption('categoryName', nargs = 2,
+                                choices=tuple(self.getCategoryList()))
+    renameHandler.setCommandFunction(self.renameCategoryFunction)
 
+  def addCategoryFunction(self, argument) :
+    categoryName = argument.categoryName[0]
 
-"""
-    self.category_name = category_name
-    self.category_type = category_type
-    self.commands_dir = os.path.join(self.base_dir, 'commands')
+    if categoryName in self.getCategoryList() or categoryName in self.commandList or categoryName in ('add', 'del', 'rename') :
+      print 'Error : %s is already existed in command name' % categoryName
+      return
 
-    # Parser of this Category
-    category_parser = parser.add_parser(self.category_name, add_help=False)
-    self.subparser = category_parser.add_subparsers()
-    #if self.category_type == 'core' :
-    #  self.setCoreCommand(parser, self.base_dir)
-    #else :
-    self.config = self.loadCategoryInfo()
-    self.setUserCommand(self.config)
+    newCategoryInfo = { 'name' : categoryName, 
+                                'base_dir' : os.path.join(self.getCategoriesDir(), categoryName)}
+    self.createCategoryDir(newCategoryInfo)
 
-    print self.category_type
-    print "::::" + self.category_type
-    if self.category_type != 'core' :
-      print "::::" + self.category_type
+    CategoryConfig = self.getCategoriesConfig()
+    CategoryConfig[categoryName] = newCategoryInfo
 
-      self.setUserCommand(self.config)
+    self.updateCategoryConfig(CategoryConfig)
+    print 'Add Category : %s is created' % categoryName
 
-    self.setCoreCommand()
-  def setCoreCommand(self) :
-    addCommandHandler=Command('add', self.subparser, self.base_dir, self.addCommand)
-    addCommandHandler.addOption('command_name', nargs='*')
-    Command('rm', self.subparser, self.base_dir, self.delCommand)
-    Command('edit', self.subparser, self.base_dir, self.editCommand)
+  def delCategoryFunction(self, argument) :
+    categoryName = argument.categoryName[0]
+    CategoryConfig = self.getCategoriesConfig()
+    self.moveOldDir(CategoryConfig[categoryName])
+    del CategoryConfig[categoryName]
+    self.updateCategoryConfig(CategoryConfig)
 
-  def setUserCommand(self, config) :
-    for command in config["commands"] :
-      print 'command ::: '+ command
-      Command(command, self.subparser, self.base_dir)
+  def renameCategoryFunction(self, argument) :
+    categoryName = argument.categoryName[0]
+    newCategoryName = argument.categoryName[1]
+    CategoryConfig = self.getCategoriesConfig()
+    temp = CategoryConfig[categoryName]
+    del CategoryConfig[categoryName]
+    temp['name'] = newCategoryName
+    CategoryConfig[newCategoryName] = temp
+    self.updateCategoryConfig(CategoryConfig)
+    os.rename(os.path.join(self.getCategoriesDir(), categoryName),
+                  os.path.join(self.getCategoriesDir(), newCategoryName))
 
-  def loadCategoryInfo(self) :
-    if not os.path.isdir(self.base_dir) :
-      os.mkdir(self.base_dir)
-      os.mkdir(os.path.join(self.base_dir,'commands'))
+  def setCategoryManagerParser(self, parser) :
+    self.CategoryManagerParser = parser
 
-      with open(os.path.join(self.base_dir, 'config'), 'w') as json_handler :
-        json.dump({ 
-                    u'commands':{},
-                    u'category_type':self.category_type
-                  }, 
-                  json_handler, indent=4)
-      
-    with open(os.path.join(self.base_dir, 'config'), 'rw') as config_handler :
-      config = json.load(config_handler)
+  def getCategoryManagerParser(self) :
+    return self.CategoryManagerParser
 
-    return config
+  def moveOldDir(self, categoryInfo) :
+    oldDirPath = os.path.join(self.getCategoriesDir(), '__olddir__')
+    if not os.path.isdir(oldDirPath) :
+      os.mkdir(oldDirPath)
+    os.rename(categoryInfo['base_dir'], os.path.join(oldDirPath, categoryInfo['name']))
 
-  def updateConfig(self) :
-    with open(os.path.join(self.base_dir, 'config'), 'w') as json_handler :
-      json.dump(self.config, json_handler, indent=4, sort_keys=True)
+  def createCategoryDir(self, categoryInfo) :
+    if categoryInfo['name'] in os.listdir(self.getCategoriesDir()) :
+      print 'Error : %s is already existed in category name ' % categoryInfo['name']
+      return
 
-  def addCommand(self, args):
-    print 'BASE PATH :: ' + args.base_path
-    print 'New Command :: ' + args.command_name[0]
-    base_path = args.base_path.encode('utf-8')
-    command_name = args.command_name[0]
-    os.system('touch ' + os.path.join(base_path, 'commands', command_name))
-    f = open(os.path.join(base_path, 'commands', command_name), 'w')
-    f.write('#!/bin/bash\n\n')
-    f.write('echo %s' % command_name)
-    self.config['commands'][command_name] = {}
-    Command(command_name, self.subparser, self.commands_dir)
-    self.updateConfig()
-    updateCmd()
+    os.mkdir(categoryInfo['base_dir'])
 
-  def delCommand(self, args):
-    print 'BASE PATH :: ' + args.base_path
-    print "delCommand in Category"
-    os.system('rm ' + os.path.join(args.base_path, 'commands', args.var))
-    updateCmd()
-    #os.system('rm ' + os.path.join(args.base_path, args.var))
-    #argcomplete.autocomplete(self.parser)
-    #self.options = self.parser.parse_args()
+  def getCategoriesDir(self) :
+    return os.path.join(self.getBaseDir(), 'categories')
 
-  def editCommand(self, args):
-    print 'BASE PATH :: ' + args.base_path
-    print "editCommand in Category"
+  def getCategoriesConfig(self) :
+    return self.CategoriesConfig
 
-  def setBaseDir(self, base_dir) :
-    self.base_dir = base_dir
+  def getCategoryList(self) :
+    return self.categoriesList
 
-  def loadCategoryInfo(self) :
+  def setCategoriesList(self, config) :
+    self.categoriesList = []
+    for category in config['categories'] :
+      self.categoriesList.append(category)
+
+  def loadCategoriesConfig(self) :
     config = self.getConfigInfo()
-    if 'categories' not in config or getCategoryName() not in config['categories'] :
+    if 'categories' not in config :
       config = self.setCategoryDataAsDefault()
 
-    self.CategoryConfig = config['categories'][getCategoryName()]
+    if not os.path.isdir(self.getCategoriesDir()) :
+      os.mkdir(self.getCategoriesDir())
+
+    self.CategoriesConfig = config['categories']
+    self.setCategoriesList(config)
 
   def setCategoryDataAsDefault(self) :
-    print self.getConfigPath()
     with open(self.getConfigPath(), 'rw') as config_handler :
       config = json.load(config_handler)
       if 'categories' not in config :
         config['categories'] = {}
-      if not os.path.isdir(self.getCategoryPath()) :
-        os.mkdir(self.getCategoryPath())
 
-      config['categories'][self.getCategoryName()] = {}
+      self.setConfigInfo(config)
 
-      print config
-      json.dump(config, config_handler, indent=4)
-      return json.load(config_handler)
-"""
+    return config
+
+  def loadCategories(self) :
+    categoriesConfig = self.getCategoriesConfig()
+    for category in categoriesConfig :
+      categoryInfo = categoriesConfig[category]
+      categoryHandler = Category(categoryInfo['name'], self.getCategoryManagerParser())
+      CommandManager(categoryHandler.getCategoryParser(), categoryInfo['base_dir'])
+
+  def updateCategoryConfig(self, categoryConfig) :
+    config = self.getConfigInfo()
+    config['categories'] = categoryConfig
+    self.setConfigInfo(config)

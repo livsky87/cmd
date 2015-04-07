@@ -4,10 +4,8 @@ import os, json
 
 from cmd.Base.Config import *
 
-class Command(Config) :
-  def __init__(self, 
-               command_name, 
-               parser) :
+class Command() :
+  def __init__(self, command_name, parser) :
     # Set initial variable for Command Class
     self.setCommandName(command_name)
     subparser = parser.add_parser(self.getCommandName(), add_help=False)
@@ -39,12 +37,6 @@ class Command(Config) :
 
   def getCommandParser(self) :
     return self.CommandParser
-
-  def saveCommandInfo(self, json) :
-    pass
-
-  def delCommandOption(self, _option) :
-    pass
 
   def setCommandFunction(self, function) :
     self.getCommandParser().set_defaults(func=function)
@@ -182,11 +174,20 @@ class CommandManager(Config) :
     print 'Add Command : %s is created' % commandName
 
   def delCommandFunction(self, argument) :
-    print argument
+    commandName = argument.commandName[0]
+    CommandConfig = self.getCommandsConfig()
+    self.moveOldDir(CommandConfig[commandName])
+    del CommandConfig[commandName]
+    self.updateCommandConfig(CommandConfig)
 
   def editCommandFunction(self, argument) :
     commandName = argument.commandName[0]
     config = self.getCommandsConfig()
     os.system('vim %s' % config[commandName]['exec_path'])
 
+  def moveOldDir(self, commandInfo) :
+    oldDirPath = os.path.join(self.getCommandsDir(), '__olddir__')
+    if not os.path.isdir(oldDirPath) :
+      os.mkdir(oldDirPath)
+    os.rename(commandInfo['exec_path'], os.path.join(oldDirPath, commandInfo['name']) + '.' + commandInfo['type'])
 
