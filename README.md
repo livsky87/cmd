@@ -10,3 +10,5 @@ Command for livsky
   	_ $ pip install argcomplete
   	
 	_ $ activate-global-python-argcomplete
+	
+	_ $ pip install requests
