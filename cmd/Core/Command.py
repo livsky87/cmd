@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # PYTHON_ARGCOMPLETE_OK
-import os, json
+import os, json, argparse
 
 from cmd.Base.Config import *
 
@@ -8,7 +8,7 @@ class Command() :
   def __init__(self, command_name, parser) :
     # Set initial variable for Command Class
     self.setCommandName(command_name)
-    subparser = parser.add_parser(self.getCommandName(), add_help=False)
+    subparser = parser.add_parser(self.getCommandName(), formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     self.setCommandParser(subparser)
 
     # Set Function by reference call
@@ -40,9 +40,17 @@ class Command() :
 
   def setCommandFunction(self, function) :
     self.getCommandParser().set_defaults(func=function)
+    self.getCommandParser().add_argument('argv', nargs='*')
+    if hasattr(self, 'command_info') and not self.command_info is None :
+      self.getCommandParser().add_argument('--option', nargs='+',
+                              choices=self.command_info['option'])
+    # self.getCommandParser().add_argument('--pi', nargs='?')
 
   def execCommandFunction(self, args) :
-    os.execve(self.getExecFilePath(), (), {})
+    # todo :
+    # ['']+args.argv,
+    # Because execve cannot recognize the first argument of "args.argv"
+    os.execve(self.getExecFilePath(), ['']+args.argv, {})
 
 class CommandManager(Config) :
   def __init__(self, parser, base_dir) :
@@ -134,8 +142,6 @@ class CommandManager(Config) :
     editHandler.addCommandOption('commandName', nargs = 1,
                                  choices=tuple(self.getCommandsList()))
     editHandler.setCommandFunction(self.editCommandFunction)
-    
-
 
   def loadCommands(self) :
     commandsConfig = self.getCommandsConfig()

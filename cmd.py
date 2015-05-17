@@ -19,7 +19,9 @@ class AutoCommand(Config) :
     Config.__init__(self, root_dir)
 
     # For Auto Command Implementation
-    parser = argparse.ArgumentParser(prog='cmd', add_help=False)
+    parser = argparse.ArgumentParser( prog='cmd',
+                                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                                  description='cmd is a tool for comfortable linux commands by livsky')
     sub = parser.add_subparsers()
     self.setAutoCommandParser(sub)
 
@@ -29,7 +31,9 @@ class AutoCommand(Config) :
     self.commandManager = CommandManager(self.getAutoCommandParser(), self.getBaseDir())
 
     # Initialize Category Controller
-    self.categoryManager = CategoryManager(self.getAutoCommandParser(), self.getBaseDir(), self.commandManager.getCommandsList())
+    self.categoryManager = CategoryManager(self.getAutoCommandParser(),
+                                                          self.getBaseDir(),
+                                                          self.commandManager.getCommandsList())
 
     # Applied Auto Complete
     argcomplete.autocomplete(parser)
