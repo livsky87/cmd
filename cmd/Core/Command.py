@@ -30,6 +30,7 @@ class Command() :
     self.command_info = command_info
 
   def getCommandInfo(self) :
+    print self.command_info
     return self.command_info
 
   def setCommandParser(self, parser) :
@@ -40,17 +41,29 @@ class Command() :
 
   def setCommandFunction(self, function) :
     self.getCommandParser().set_defaults(func=function)
+
+    if hasattr(self, 'command_info') and not self.command_info['option'] is None :
+      for opt in self.command_info['option'] :
+        if type(opt) is unicode :
+          self.getCommandParser().add_argument('--'+opt, action='store_true')
+        elif type(opt) is dict :
+          for item in opt :
+            self.getCommandParser().add_argument('--'+item, choices=opt[item])
     self.getCommandParser().add_argument('argv', nargs='*')
-    if hasattr(self, 'command_info') and not self.command_info is None :
-      self.getCommandParser().add_argument('--option', nargs='+',
-                              choices=self.command_info['option'])
-    # self.getCommandParser().add_argument('--pi', nargs='?')
 
   def execCommandFunction(self, args) :
     # todo :
     # ['']+args.argv,
     # Because execve cannot recognize the first argument of "args.argv"
-    os.execve(self.getExecFilePath(), ['']+args.argv, {})
+    opt_list = ['']
+    for k, v in args.__dict__.iteritems() :
+      print (k,v)
+      if v == True :
+        opt_list.append(k)
+      elif not k is 'func' and not k is 'argv' and not v is None:
+        opt_list.append(v)
+
+    os.execve(self.getExecFilePath(), opt_list+args.argv, {})
 
 class CommandManager(Config) :
   def __init__(self, parser, base_dir) :
@@ -143,6 +156,10 @@ class CommandManager(Config) :
                                  choices=tuple(self.getCommandsList()))
     editHandler.setCommandFunction(self.editCommandFunction)
 
+    confHandler = Command('conf', self.getCommandManagerParser())
+    confHandler.addCommandOption('args', nargs = '?')
+    confHandler.setCommandFunction(self.confCommandFunction)
+
   def loadCommands(self) :
     commandsConfig = self.getCommandsConfig()
     for command in commandsConfig :
@@ -190,6 +207,9 @@ class CommandManager(Config) :
     commandName = argument.commandName[0]
     config = self.getCommandsConfig()
     os.system('vim %s' % config[commandName]['exec_path'])
+
+  def confCommandFunction(self, argument) :
+    os.system('vim %s' % self.getConfigPath())
 
   def moveOldDir(self, commandInfo) :
     oldDirPath = os.path.join(self.getCommandsDir(), '__olddir__')
