@@ -30,7 +30,6 @@ class Command() :
     self.command_info = command_info
 
   def getCommandInfo(self) :
-    print self.command_info
     return self.command_info
 
   def setCommandParser(self, parser) :
@@ -57,7 +56,6 @@ class Command() :
     # Because execve cannot recognize the first argument of "args.argv"
     opt_list = ['']
     for k, v in args.__dict__.iteritems() :
-      print (k,v)
       if v == True :
         opt_list.append(k)
       elif not k is 'func' and not k is 'argv' and not v is None:
